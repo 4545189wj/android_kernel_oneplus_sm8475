@@ -193,7 +193,7 @@ void ufshid_init(struct ufsf_feature *ufsf);
 void ufshid_reset(struct ufsf_feature *ufsf);
 void ufshid_reset_host(struct ufsf_feature *ufsf);
 void ufshid_remove(struct ufsf_feature *ufsf);
-void ufshid_suspend(struct ufsf_feature *ufsf);
+void ufshid_suspend(struct ufsf_feature *ufsf, bool is_system_pm);
 void ufshid_resume(struct ufsf_feature *ufsf, bool is_link_off);
 int ufshid_send_file_info(struct ufshid_dev *hid, int lun, unsigned char *buf,
 			  __u16 size, __u8 idn);
