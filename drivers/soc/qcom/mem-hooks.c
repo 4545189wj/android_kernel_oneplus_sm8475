@@ -185,7 +185,7 @@ static int __init init_mem_hooks(void)
 		pr_err("Failed to register set_dma_mask hook\n");
 		return ret;
 	}
-	
+
 	ret = register_trace_android_vh_try_fixup_sea(can_fixup_sea, NULL);
 	if (ret) {
 		pr_err("Failed to register try_fixup_sea\n");
