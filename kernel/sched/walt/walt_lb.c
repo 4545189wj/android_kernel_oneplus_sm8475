@@ -10,6 +10,7 @@
 
 #if IS_ENABLED(CONFIG_OPLUS_FEATURE_SCHED_ASSIST)
 #include <../../oplus_cpu/sched/sched_assist/sa_fair.h>
+#include <../kernel/oplus_cpu/sched/sched_assist/sa_common.h>
 #endif
 #if IS_ENABLED(CONFIG_OPLUS_FEATURE_LOADBALANCE)
 #include <../../oplus_cpu/sched/sched_assist/sa_balance.h>
@@ -197,6 +198,11 @@ static void walt_lb_check_for_rotation(struct rq *src_rq)
 
 		if (rq->nr_running > 1)
 			continue;
+
+#if IS_ENABLED(CONFIG_OPLUS_FEATURE_SCHED_ASSIST)
+		if (test_task_ux(rq->curr))
+			continue;
+#endif
 
 #if IS_ENABLED(CONFIG_OPLUS_FEATURE_FRAME_BOOST)
 		if (fbg_skip_migration(rq->curr, i, src_cpu))
