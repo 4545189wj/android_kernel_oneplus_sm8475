@@ -148,6 +148,11 @@ char *md_dma_buf_info_addr;
 size_t md_dma_buf_procs_size = SZ_256K;
 char *md_dma_buf_procs_addr;
 
+#ifdef CONFIG_QCOM_MINIDUMP_PANIC_KTASK_STACK
+#define MD_KTASK_STACK_PAGES	768
+static struct seq_buf *md_ktask_stack_buf;
+#endif
+
 /* Modules information */
 #ifdef CONFIG_MODULES
 #define MD_MODULE_PAGES	  8
@@ -266,8 +271,11 @@ void dump_stack_minidump(u64 sp)
 	}
 
 
-	if (is_idle_task(current))
+	if (is_idle_task(current)) {
+		pr_err("CPU %d current (stack_vm_area=%px, stack=%px, stack_refcount=%d) is idle, returning.\n",
+			cpu, current->stack_vm_area, current->stack, refcount_read(&current->stack_refcount));
 		return;
+	}
 
 	is_vmap_stack = IS_ENABLED(CONFIG_VMAP_STACK);
 
@@ -283,20 +291,30 @@ void dump_stack_minidump(u64 sp)
 	 * address of one page of the stack.
 	 */
 	stack_vm_area = task_stack_vm_area(current);
-	if (is_vmap_stack) {
-		sp &= ~(PAGE_SIZE - 1);
-		copy_pages = calculate_copy_pages(sp, stack_vm_area);
-		for (i = 0; i < copy_pages; i++) {
-			scnprintf(ksp_entry.name, sizeof(ksp_entry.name),
-				  "KSTACK%d_%d", cpu, i);
-			(void)register_stack_entry(&ksp_entry, sp, PAGE_SIZE);
-			sp += PAGE_SIZE;
+	if (stack_vm_area) {
+		if (is_vmap_stack) {
+			sp &= ~(PAGE_SIZE - 1);
+			copy_pages = calculate_copy_pages(sp, stack_vm_area);
+			if (copy_pages > 0) {
+				for (i = 0; i < copy_pages; i++) {
+					scnprintf(ksp_entry.name, sizeof(ksp_entry.name),
+						  "KSTACK%d_%d", cpu, i);
+					(void)register_stack_entry(&ksp_entry, sp, PAGE_SIZE);
+					sp += PAGE_SIZE;
+				}
+			} else {
+				pr_err("CPU %d current (comm=%s, pid=%d) sp (0x%llx) not in range (0x%llx, +0x%llx), returning.\n",
+					cpu, current->comm, current->pid, sp, (u64)stack_vm_area->addr, get_vm_area_size(stack_vm_area));
+			}
+		} else {
+			sp &= ~(THREAD_SIZE - 1);
+			scnprintf(ksp_entry.name, sizeof(ksp_entry.name), "KSTACK%d",
+				  cpu);
+			(void)register_stack_entry(&ksp_entry, sp, THREAD_SIZE);
 		}
 	} else {
-		sp &= ~(THREAD_SIZE - 1);
-		scnprintf(ksp_entry.name, sizeof(ksp_entry.name), "KSTACK%d",
-			  cpu);
-		(void)register_stack_entry(&ksp_entry, sp, THREAD_SIZE);
+		pr_err("CPU %d current (comm=%s, pid=%d, stack=%px, stack_refcount=%d) stack_vm_area is 0, returning.\n",
+			cpu, current->comm, current->pid, current->stack, refcount_read(&current->stack_refcount));
 	}
 
 	scnprintf(ktsk_entry.name, sizeof(ktsk_entry.name), "KTASK%d", cpu);
@@ -1051,6 +1069,38 @@ static void md_ipi_stop(void *unused, struct pt_regs *regs)
 }
 #endif
 
+#ifdef CONFIG_QCOM_MINIDUMP_PANIC_KTASK_STACK
+static bool dump_trace(void *arg, unsigned long where)
+{
+	seq_buf_printf(md_ktask_stack_buf, "%pSb\n", (void *)where);
+	return true;
+}
+
+static void md_dump_ktask_stack(void)
+{
+	struct task_struct *g, *t;
+	unsigned int state;
+
+	if (!md_ktask_stack_buf)
+		return;
+
+	for_each_process_thread(g, t) {
+		state = READ_ONCE(t->state);
+		if ((state & TASK_UNINTERRUPTIBLE) && !(state & TASK_WAKEKILL)
+					&& !(state & TASK_NOLOAD))
+			seq_buf_printf(md_ktask_stack_buf,
+					"Task blocked for %ld seconds!",
+					(jiffies - t->last_switch_time) / HZ);
+		seq_buf_printf(md_ktask_stack_buf, "%d [%s]\n",
+				task_pid_nr(t), t->comm);
+		arch_stack_walk(dump_trace, NULL, t, NULL);
+		seq_buf_printf(md_ktask_stack_buf, "\n");
+	}
+	seq_buf_printf(md_ktask_stack_buf, "---ktask stack end---\n");
+}
+
+#endif
+
 static int md_panic_handler(struct notifier_block *this,
 			    unsigned long event, void *ptr)
 {
@@ -1066,6 +1116,9 @@ static int md_panic_handler(struct notifier_block *this,
 dump_rq:
 #endif
 	md_dump_runqueues();
+#ifdef CONFIG_QCOM_MINIDUMP_PANIC_KTASK_STACK
+	md_dump_ktask_stack();
+#endif
 	if (md_meminfo_seq_buf)
 		md_dump_meminfo(md_meminfo_seq_buf);
 
@@ -1161,6 +1214,10 @@ static void md_register_panic_data(void)
 	md_register_panic_entries(MD_CPU_CNTXT_PAGES, "KCNTXT",
 				  &md_cntxt_seq_buf);
 	register_trace_android_vh_ipi_stop(md_ipi_stop, NULL);
+#endif
+#ifdef CONFIG_QCOM_MINIDUMP_PANIC_KTASK_STACK
+	md_register_panic_entries(MD_KTASK_STACK_PAGES, "KTASK_STACK",
+				  &md_ktask_stack_buf);
 #endif
 	md_register_panic_entries(MD_MEMINFO_PAGES, "MEMINFO",
 				  &md_meminfo_seq_buf);
