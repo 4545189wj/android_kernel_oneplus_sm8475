@@ -32,6 +32,9 @@ INSTALL = install
 DESTDIR ?=
 DESTDIR_SQ = '$(subst ','\'',$(DESTDIR))'
 
+# 强制 libelf 检测通过
+$(eval $(call feature_set,libelf,1))
+
 include $(srctree)/tools/scripts/Makefile.arch
 
 # Use pkg-config to find libelf
