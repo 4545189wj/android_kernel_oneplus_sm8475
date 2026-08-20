@@ -53,7 +53,8 @@ CFLAGS := -g \
           -I$(LIBBPF_SRC) \
           -I$(SUBCMD_SRC)
 
-LIBS = -lelf -lz
+LIBELF_LIBS := $(shell $(HOSTPKG_CONFIG) libelf --libs 2>/dev/null || echo -lelf)
+LIBS = $(LIBELF_LIBS) -lz
 
 export srctree OUTPUT CFLAGS Q
 include $(srctree)/tools/build/Makefile.include
