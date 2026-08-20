@@ -1,3 +1,6 @@
+# 强制禁用 libelf 检测
+feature-libelf := 1
+
 # SPDX-License-Identifier: GPL-2.0-only
 feature_dir := $(srctree)/tools/build/feature
 
