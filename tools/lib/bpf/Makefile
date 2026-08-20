@@ -292,9 +292,8 @@ clean: config-clean
 PHONY += force elfdep zdep bpfdep cscope tags
 force:
 
-# elfdep 目标已禁用
 elfdep:
-	@echo "elfdep disabled - libelf will be linked via pkg-config"
+	@echo "elfdep disabled"
 
 zdep:
 	@if [ "$(feature-zlib)" != "1" ]; then echo "No zlib found"; exit 1 ; fi
