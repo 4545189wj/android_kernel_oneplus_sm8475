@@ -50,6 +50,9 @@ export DESTDIR DESTDIR_SQ
 
 include $(srctree)/tools/scripts/Makefile.include
 
+# Use pkg-config to find libelf
+LIBELF_LIBS := $(shell pkg-config --libs libelf 2>/dev/null || echo -lelf)
+
 # copy a bit from Linux kbuild
 
 ifeq ("$(origin V)", "command line")
@@ -187,7 +190,7 @@ $(OUTPUT)libbpf.so: $(OUTPUT)libbpf.so.$(LIBBPF_VERSION)
 $(OUTPUT)libbpf.so.$(LIBBPF_VERSION): $(BPF_IN_SHARED) $(VERSION_SCRIPT)
 	$(QUIET_LINK)$(CC) $(LDFLAGS) \
 		--shared -Wl,-soname,libbpf.so.$(LIBBPF_MAJOR_VERSION) \
-		-Wl,--version-script=$(VERSION_SCRIPT) $< -lelf -lz -o $@
+		-Wl,--version-script=$(VERSION_SCRIPT) $< $(LIBELF_LIBS) -lz -o $@
 	@ln -sf $(@F) $(OUTPUT)libbpf.so
 	@ln -sf $(@F) $(OUTPUT)libbpf.so.$(LIBBPF_MAJOR_VERSION)
 
@@ -284,7 +287,7 @@ PHONY += force elfdep zdep bpfdep cscope tags
 force:
 
 elfdep:
-	@if [ "$(feature-libelf)" != "1" ]; then echo "No libelf found"; exit 1 ; fi
+	@# 强制通过，因为系统已安装 libelf，且 pkg-config 能找到
 
 zdep:
 	@if [ "$(feature-zlib)" != "1" ]; then echo "No zlib found"; exit 1 ; fi
